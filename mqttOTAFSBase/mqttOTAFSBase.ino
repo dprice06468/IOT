@@ -62,14 +62,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   
     //todo: customize to pull data from json payload
     const char* sensor = root["sensor"];
-    long blinkrate = root["blinkrate"];
+    long ltime = root["time"];
     double latitude = root["data"][0];
     double longitude = root["data"][1];
+    long top = root["top"];
+    long bottom = root["bottom"];
   
     Serial.println(sensor);
-    Serial.println("blinkrate: " + blinkrate);
+    Serial.println(ltime);
     Serial.println(latitude, 6);
     Serial.println(longitude, 6);
+    Serial.println(top);
+    Serial.println(bottom);
 
     Serial.println("started");
   } else if ((strcmp(topic, MQTT_STOP)==0) && running) {
@@ -160,7 +164,7 @@ void connectToWifi(boolean resetWifiSettings) {
   char nameAP[100];
   strcpy(nameAP, MQTT_CLIENT_ID);
   strcpy(nameAP, "_AP");
-  if (!wifiManager.autoConnect(nameAP, "password")) {
+  if (!wifiManager.autoConnect(nameAP)) {
     Serial.println("failed to connect and hit timeout");
     delay(3000);
     //reset and try again, or maybe put it to deep sleep
