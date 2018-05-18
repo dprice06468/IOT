@@ -10,9 +10,6 @@ IOTAppStory IAS(APPNAME, VERSION, COMPDATE, MODEBUTTON);
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
 #include <PubSubClient.h>         //MQTT include
-#include <IRremoteESP8266.h>
-#include <IRrecv.h>
-#include <IRutils.h>
 
 unsigned long blinkEntry;
 
@@ -21,18 +18,6 @@ unsigned long blinkEntry;
 // Use functions like atoi() and atof() to transform the char array to integers or floats
 // Use IAS.dPinConv() to convert Dpin numbers to integers (D6 > 14)
 
-//******************
-//char* device_name = "ir";                 //unique IR identifier
-//char* mqtt_server = "192.168.1.31";
-//char* mqtt_port = "1883";
-//char* LEDpin = "D4";               // The value given here is the default value and can be overwritten by values saved in configuration mode
-//char* triggerPin = "5";            // The value given here is the default value and can be overwritten by values saved in configuration mode
-//char* echoPin = "4";               // The value given here is the default value and can be overwritten by values saved in configuration mode
-//char* proximityLedPin = "2";
-//char* range = "50";                // The value given here is the default value and can be overwritten by values saved in configuration mode
-//char* blinkTime = "1000";
-//******************
-
 boolean running = false;
 
 //setup MQTT client
@@ -40,15 +25,15 @@ WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
 #define STOPPED_LED_PIN D1
-#define RUNNING_LED_PIN D4
+#define RUNNING_LED_PIN D2
 
 //**************************************************************
 char* device_name = "ir";                 //unique IR identifier
 char* mqtt_server = "192.168.1.31";
 char* mqtt_port = "1883";
-char* LEDpin = "D4";               // The value given here is the default value and can be overwritten by values saved in configuration mode
-char* triggerPin = "5";            // The value given here is the default value and can be overwritten by values saved in configuration mode
-char* echoPin = "4";               // The value given here is the default value and can be overwritten by values saved in configuration mode
+char* LEDpin = "2";       //D4     // The value given here is the default value and can be overwritten by values saved in configuration mode
+char* triggerPin = "16";  //D0     // The value given here is the default value and can be overwritten by values saved in configuration mode
+char* echoPin = "14";     //D5     // The value given here is the default value and can be overwritten by values saved in configuration mode
 char* proximityLedPin = "2";
 char* range = "50";                // The value given here is the default value and can be overwritten by values saved in configuration mode
 
@@ -91,11 +76,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     } else if ((strcmp(topic, MQTT_GO)==0) && running) {
       //publish TRIGGERED mqtt msg
       mqttClient.publish(MQTT_TRIGGERED, device_name);
-  
-      //actuate the IR action
-//      digitalWrite(IR_LED_PIN, HIGH);
-//      delay(2000);
-//      digitalWrite(IR_LED_PIN, LOW);
       Serial.println("triggered");
     } else {
       Serial.println("unknown topic"); 
@@ -110,6 +90,7 @@ int getdist(void) {
   long duration;
   int distance;
   int iTrigPin = atoi(triggerPin);
+  int iEchoPin = atoi(echoPin);
 
   //init trigger pin
   digitalWrite(iTrigPin, LOW);
@@ -121,7 +102,7 @@ int getdist(void) {
   digitalWrite(iTrigPin, LOW);
 
   //capture echo and calculate duration
-  duration = pulseIn(atoi(echoPin), HIGH);
+  duration = pulseIn(iEchoPin, HIGH);
   //Serial.println(duration);
 
   //calculate distance in cm (for inches divide by 148)
@@ -144,10 +125,9 @@ void getDistanceAndSend() {
     mqttClient.publish(MQTT_TRIGGERED, carr);
 
     Serial.print("Distance: "); Serial.println(dist);
-    //analogWrite(proximityLedPin, dist);
-    digitalWrite(atoi(proximityLedPin), HIGH);
-    delay(1000);
-    digitalWrite(atoi(proximityLedPin), LOW);
+    //digitalWrite(atoi(proximityLedPin), HIGH);
+    //delay(2000);
+    //digitalWrite(atoi(proximityLedPin), LOW);
   }
 }
 
@@ -164,6 +144,10 @@ void setupLogic() {
 //--------------------------------------------------------------
 //--------------------------------------------------------------
 void loopLogic() {
+  //  digitalWrite(atoi(proximityLedPin), HIGH);
+  //  delay(500);
+  //  digitalWrite(atoi(proximityLedPin), LOW);
+  //  delay(500);
   if (running)
     getDistanceAndSend();
 }
@@ -203,13 +187,13 @@ void setup() {
   IAS.addField(mqtt_port, "mqtt_port", "MQTT Port", 6);             // These fields are added to the config wifimanager and saved to eeprom. Updated values are returned to the original variable.
   IAS.addField(LEDpin, "ledpin", "ledPin", 2);             // These fields are added to the config wifimanager and saved to eeprom. Updated values are returned to the original variable.
   //IAS.addField(blinkTime, "Blinktime(mS)", "BlinkTime(ms)", 5);
-//**************************
+  //**************************
   IAS.addField(triggerPin, "Trigger Pin", "Trigger Pin", 2);
   IAS.addField(echoPin, "Echo Pin", "Echo Pin", 2);
   IAS.addField(proximityLedPin, "Proximity LED Pin", "Proximity LED Pin", 2);
   IAS.addField(range, "Range", "Range", 3);
   // reference to org variable | field name | field label value | max char return
-//**************************
+  //**************************
 
   IAS.begin(true);      // 1st parameter: true or false to view BOOT STATISTICS | 2nd parameter: true or false to erase eeprom on first boot of the app
 
@@ -222,14 +206,9 @@ void setup() {
   digitalWrite(RUNNING_LED_PIN, LOW); // turn the LED off by making the voltage LOW
   digitalWrite(STOPPED_LED_PIN, LOW); // turn the LED off by making the voltage LOW
 
-//**************************
-setupLogic();
-//  pinMode(atoi(triggerPin), OUTPUT);
-//  pinMode(atoi(echoPin), INPUT);
-//  pinMode(atoi(proximityLedPin), OUTPUT);
-//  digitalWrite(atoi(triggerPin), LOW);      
-//  digitalWrite(atoi(proximityLedPin), LOW);      
-//**************************
+  //**************************
+  setupLogic();
+  //**************************
 
   //Prepare MQTT client
   Serial.print("server: "); Serial.print(mqtt_server);
@@ -255,11 +234,9 @@ void loop() {
   if (mqttClient.connected())
     mqttClient.loop();
 
-//**************************
+  //**************************
   loopLogic();
-//  if (running)
-//    getDistanceAndSend();
-//**************************
+  //**************************
 
 /*  if (millis() - blinkEntry > atoi(blinkTime)) {
     digitalWrite(IAS.dPinConv(LEDpin), !digitalRead(IAS.dPinConv(LEDpin)));
