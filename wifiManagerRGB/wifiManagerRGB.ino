@@ -1,9 +1,9 @@
 //#pragma once
 
-char* scene = "candystore";
-char* device_name = "rgb";
-char* mqtt_server = "192.168.1.31";
-char* mqtt_port = "1883";
+char scene[40] = "candystore";
+char device_name[40] = "led";
+char mqtt_server[16] = "192.168.1.31";
+char mqtt_port[6] = "1883";
 
 #include <FS.h> //this needs to be first, or it all crashes and burns...
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
@@ -50,10 +50,10 @@ int gamma_table[PWM_VALUE + 1] = {
 // TX GPIO2 @Serial1 (Serial1 ONE)
 // RX GPIO3 @Serial1    
 
-#define LEDoff digitalWrite(onboardGreenLEDPIN,HIGH)
-#define LEDon digitalWrite(onboardGreenLEDPIN,LOW)
-#define LED2off digitalWrite(onboardRedLEDPIN,HIGH)
-#define LED2on digitalWrite(onboardRedLEDPIN,LOW)
+#define RedLEDoff digitalWrite(onboardRedLEDPIN,HIGH)
+#define RedLEDon digitalWrite(onboardRedLEDPIN,LOW)
+#define GreenLEDoff digitalWrite(onboardGreenLEDPIN,HIGH)
+#define GreenLEDon digitalWrite(onboardGreenLEDPIN,LOW)
 
 //MQTT settings
 #define MQTT_ONLINE   "online"     //topic published when node is online
@@ -72,7 +72,7 @@ int led_delay_green = 0;
 int led_delay_blue = 0;
 int led_delay_w1 = 0;
 int led_delay_w2 = 0;
-#define time_at_colour 1000 
+#define time_at_colour 100 
 unsigned long TIME_LED_RED = 0;
 unsigned long TIME_LED_GREEN = 0;
 unsigned long TIME_LED_BLUE = 0;
@@ -108,11 +108,11 @@ void setupLogic() {
 //loop routine logic
 //-------------------------------------------------------------------
 void loopLogic() {
-//  LEDon;
-//  LED2off;
+//  RedLEDon;
+//  GreenLEDoff;
 //  delay(300);
-//  LEDoff;
-//  LED2on;
+//  RedLEDoff;
+//  GreenLEDon;
 //  delay(300);
 }
 
@@ -185,6 +185,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 //**************************************************************
 
 //-------------------------------------------------------------
+//get wifi parms from SPIFFS and connect to wifi
 //-------------------------------------------------------------
 void setup_wifi2() {
   delay(10);
@@ -202,7 +203,8 @@ void setup_wifi2() {
     Serial1.println("We haven't got any access point credentials, so get them now");
     initialConfig = true;
   } else {
-    digitalWrite(onboardRedLEDPIN, HIGH); // Turn LED off as we are not in configuration mode.
+    GreenLEDoff;  // Turn LED off as we are not in configuration mode.
+    //digitalWrite(onboardRedLEDPIN, HIGH); 
     WiFi.mode(WIFI_STA); // Force to station mode because if device was switched off while in access point mode it will start up next time in access point mode.
     unsigned long startedAt = millis();
     Serial1.print("After waiting ");
@@ -352,6 +354,7 @@ void LED_RED()
     if (RED_A > RED) RED_A = RED_A - 1;
     if (RED_A < RED) RED_A++;
     analogWrite(REDPIN, RED_A);
+//Serial1.print(millis()); Serial1.print(" - red: "); Serial1.print(RED); Serial1.print("red_a: "); Serial1.println(RED_A);
   }
 }
 
@@ -456,20 +459,21 @@ void setup()
   Serial1.println();
   Serial1.println();
 
-  setup_wifi2();
-//  mqttClient.setServer(mqtt_server, atoi(mqtt_port));
-//  mqttClient.setCallback(mqttCallback);
+  RedLEDoff;  //turn green led off until connected
 
-  LEDon;
+  //get wifi parms from SPIFFS and connect to wifi
+  setup_wifi2();
 
   while (WiFi.status() != WL_CONNECTED) {
-    LED2off;
+    GreenLEDoff;
     delay(500);
     Serial1.print(".");
-    LED2on;
+    GreenLEDon;
   }
 
   Serial1.println("");
+
+  RedLEDon;   //turn green led on indicating we are connected
 
   Serial1.println("WiFi connected");
   Serial1.println("IP address: ");
@@ -482,8 +486,8 @@ void setup()
     Serial1.println("Failed to connect, finishing setup anyway");
   } else{
     //Prepare MQTT client
-    Serial1.print("server: "); Serial1.print(mqtt_server);
-    Serial1.print(" port: "); Serial1.println(atoi(mqtt_port));
+    Serial1.print("mqtt server: "); Serial1.println(mqtt_server);
+    Serial1.print("mqtt port: "); Serial1.println(atoi(mqtt_port));
     mqttClient.setServer(mqtt_server, atoi(mqtt_port));
     mqttClient.setCallback(mqttCallback);
 
@@ -503,7 +507,8 @@ void loop()
   // is configuration portal requested?
   if ((digitalRead(TRIGGER_PIN) == LOW) || (initialConfig)) {
      Serial1.println("Configuration portal requested");
-     digitalWrite(onboardRedLEDPIN, LOW); // turn the LED on by making the voltage LOW to tell us we are in configuration mode.
+     GreenLEDon;  // turn the LED on indicating we are in configuration mode.
+     //digitalWrite(onboardRedLEDPIN, LOW); 
     //Local intialization. Once its business is done, there is no need to keep it around
 
     // Extra parameters to be configured
@@ -511,14 +516,17 @@ void loop()
     // Format: <ID> <Placeholder text> <default value> <length> <custom HTML> <label placement>
     WiFiManagerParameter custom_scene("scene", "scene", scene, 40);
     WiFiManagerParameter custom_device("device_name", "device_name", device_name, 40);
-    WiFiManagerParameter custom_mqtt_server("mqttserver", "mqtt server", mqtt_server, 40);
-    WiFiManagerParameter custom_mqtt_port("mqttport", "mqtt port", mqtt_port, 5);
+    WiFiManagerParameter custom_mqtt_server("mqttserver", "mqtt server", mqtt_server, 16);
+    WiFiManagerParameter custom_mqtt_port("mqttport", "mqtt port", mqtt_port, 6);
 
     // Just a quick hint
     WiFiManagerParameter p_hint("<small>*Hint: if you want to reuse the currently active WiFi credentials, leave SSID and Password fields empty</small>");
     
     // Initialize WiFIManager
     WiFiManager wifiManager;
+    
+    //set config save notify callback
+    wifiManager.setSaveConfigCallback(saveConfigCallback);
     
     //add all parameters here  
     wifiManager.addParameter(&p_hint);
@@ -551,9 +559,11 @@ void loop()
     strcpy(mqtt_port, custom_mqtt_port.getValue());
 
     // Writing JSON config file to flash for next boot
-    writeConfigFile();
-    
-    digitalWrite(onboardRedLEDPIN, HIGH); // Turn LED off as we are not in configuration mode.
+    if (shouldSaveConfig)
+      writeConfigFile();
+
+    GreenLEDoff;  // Turn LED off indicating we are not in configuration mode.
+    //digitalWrite(onboardRedLEDPIN, HIGH); 
 
     ESP.reset(); // This is a bit crude. For some unknown reason webserver can only be started once per boot up 
     // so resetting the device allows to go back into config mode again when it reboots.
@@ -608,11 +618,11 @@ bool readConfigFile() {
     // Parse all config file parameters, override 
     // local config variables with parsed values
     if (json.containsKey("scene")) {
-      strcpy(mqtt_server, json["scene"]);      
+      strcpy(scene, json["scene"]);      
     }
     
     if (json.containsKey("device_name")) {
-      strcpy(mqtt_port, json["device_name"]);
+      strcpy(device_name, json["device_name"]);
     }
 
     if (json.containsKey("mqtt_server")) {
